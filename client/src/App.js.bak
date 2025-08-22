@@ -1,0 +1,47 @@
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { SocketProvider } from './context/SocketContext';
+import { AlertProvider } from './context/AlertContext';
+import Header from './components/Header';
+import Sidebar from './components/Sidebar';
+import Dashboard from './pages/Dashboard';
+import Pipelines from './pages/Pipelines';
+import Alerts from './pages/Alerts';
+import Metrics from './pages/Metrics';
+import PipelineDetail from './pages/PipelineDetail';
+
+// Set the API base URL for Docker environment
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? 'http://localhost:5000' 
+  : 'http://localhost:5000';
+
+// Make it available globally
+window.API_BASE_URL = API_BASE_URL;
+
+function App() {
+  return (
+    <SocketProvider>
+      <AlertProvider>
+        <Router>
+          <div className="min-h-screen bg-gray-50">
+            <Header />
+            <div className="flex">
+              <Sidebar />
+              <main className="flex-1 p-6">
+                <Routes>
+                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/pipelines" element={<Pipelines />} />
+                  <Route path="/pipelines/:id" element={<PipelineDetail />} />
+                  <Route path="/alerts" element={<Alerts />} />
+                  <Route path="/metrics" element={<Metrics />} />
+                </Routes>
+              </main>
+            </div>
+          </div>
+        </Router>
+      </AlertProvider>
+    </SocketProvider>
+  );
+}
+
+export default App;

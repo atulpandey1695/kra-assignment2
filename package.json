@@ -1,0 +1,40 @@
+{
+  "name": "cicd-pipeline-dashboard",
+  "version": "1.0.0",
+  "description": "CI/CD Pipeline Health Dashboard with real-time monitoring and alerting",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "nodemon server/index.js",
+    "client": "cd client && npm start",
+    "client-build": "cd client && npm run build",
+    "server": "nodemon server/index.js",
+    "dev-full": "concurrently \"npm run server\" \"npm run client\"",
+    "install-all": "npm install && cd client && npm install",
+    "setup-db": "node server/database/setup.js",
+    "seed-data": "node scripts/seed-data.js",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "keywords": ["cicd", "pipeline", "dashboard", "monitoring", "devops"],
+  "author": "DevOps Engineer",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "dotenv": "^16.3.1",
+    "pg": "^8.11.3",
+    "socket.io": "^4.7.4",
+    "nodemailer": "^6.9.7",
+    "@slack/web-api": "^6.10.0",
+    "cron": "^3.1.6",
+    "winston": "^3.11.0",
+    "express-rate-limit": "^7.1.5",
+    "compression": "^1.7.4",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "concurrently": "^8.2.2"
+  }
+}
