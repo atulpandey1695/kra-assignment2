@@ -46,11 +46,21 @@ jobs:
         run: |
           STATUS="SUCCESS"
           if [ "${{ job.status }}" != "success" ]; then STATUS="FAILED"; fi
-          
+
+          echo "Waiting for backend to be ready..."
+          for i in {1..10}; do
+            if curl -s http://localhost:5000/health >/dev/null; then
+              echo "Backend is up!"
+              break
+            fi
+            echo "Retrying in 5s..."
+            sleep 5
+          done
+
           echo "Recording pipeline status into Postgres (via backend API)..."
           curl -X POST http://localhost:5000/pipelines/cicd-status \
             -H "Content-Type: application/json" \
-            -d "{\"name\":\"cicd-pipeline\",\"status\":\"$STATUS\"}"
+            -d "{\"name\":\"cicd-pipeline\",\"status\":\"$STATUS\"}"            
 
       - name: Install ngrok
         run: |
@@ -59,7 +69,10 @@ jobs:
           sudo apt-get update && sudo apt-get install -y ngrok jq
 
       - name: Expose frontend and backend via ngrok
+        env:
+          NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
         run: |
+          ngrok config add-authtoken $NGROK_AUTHTOKEN
           nohup ngrok http 8080 --log=stdout > ngrok-frontend.log &
           nohup ngrok http 5000 --log=stdout > ngrok-backend.log &
           sleep 10

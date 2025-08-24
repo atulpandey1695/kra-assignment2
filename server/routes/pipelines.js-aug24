@@ -2,45 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { query } = require('../database/connection');
 
-/**
- * NEW ENDPOINT
- * Record pipeline result (for CI/CD integrations like Jenkins/GitHub Actions)
- * Must be defined BEFORE /:id to avoid route conflicts
- */
-router.post('/cicd-status', async (req, res) => {
-  try {
-    const {
-      name,
-      status,
-      build_time,
-      trigger_type = 'ci',
-      branch,
-      commit_hash,
-      logs = ''
-    } = req.body;
-
-    if (!name || !status) {
-      return res.status(400).json({ error: 'Pipeline name and status are required' });
-    }
-
-    const result = await query(`
-      INSERT INTO pipelines (name, status, build_time, trigger_type, branch, commit_hash, logs)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING *
-    `, [name, status, build_time, trigger_type, branch, commit_hash, logs]);
-
-    res.status(201).json({
-      message: 'Pipeline recorded successfully',
-      pipeline: result.rows[0]
-    });
-  } catch (error) {
-    console.error('Error recording pipeline result:', error);
-    res.status(500).json({ error: 'Failed to record pipeline result' });
-  }
-});
-
-// ================= Existing routes ================= //
-
 // Get all pipelines with pagination
 router.get('/', async (req, res) => {
   try {
@@ -197,7 +158,140 @@ router.patch('/:id/status', async (req, res) => {
   }
 });
 
-// Other routes (logs, delete, recent, stats) remain unchanged…
+// Get pipeline logs
+router.get('/:id/logs', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await query('SELECT logs FROM pipelines WHERE id = $1', [id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Pipeline not found' });
+    }
+    
+    res.json({ logs: result.rows[0].logs });
+  } catch (error) {
+    console.error('Error fetching pipeline logs:', error);
+    res.status(500).json({ error: 'Failed to fetch pipeline logs' });
+  }
+});
+
+// Update pipeline logs
+router.patch('/:id/logs', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { logs } = req.body;
+
+    if (!logs) {
+      return res.status(400).json({ error: 'Logs content is required' });
+    }
+
+    const result = await query(`
+      UPDATE pipelines 
+      SET logs = $1, updated_at = $2
+      WHERE id = $3
+      RETURNING id, logs
+    `, [logs, new Date(), id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Pipeline not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating pipeline logs:', error);
+    res.status(500).json({ error: 'Failed to update pipeline logs' });
+  }
+});
+
+// Delete pipeline
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await query('DELETE FROM pipelines WHERE id = $1 RETURNING id', [id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Pipeline not found' });
+    }
+    
+    res.json({ message: 'Pipeline deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting pipeline:', error);
+    res.status(500).json({ error: 'Failed to delete pipeline' });
+  }
+});
+
+// Get recent pipelines (last 24 hours)
+router.get('/recent/24h', async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT * FROM pipelines 
+      WHERE created_at >= NOW() - INTERVAL '24 hours'
+      ORDER BY created_at DESC
+    `);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching recent pipelines:', error);
+    res.status(500).json({ error: 'Failed to fetch recent pipelines' });
+  }
+});
+
+// Get pipeline statistics
+router.get('/stats/overview', async (req, res) => {
+  try {
+    const stats = await query(`
+      SELECT 
+        COUNT(*) as total_pipelines,
+        COUNT(CASE WHEN status = 'success' THEN 1 END) as successful,
+        COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed,
+        COUNT(CASE WHEN status = 'running' THEN 1 END) as running,
+        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending,
+        AVG(build_time) as avg_build_time,
+        MAX(created_at) as last_pipeline
+      FROM pipelines
+    `);
+
+    res.json(stats.rows[0]);
+  } catch (error) {
+    console.error('Error fetching pipeline stats:', error);
+    res.status(500).json({ error: 'Failed to fetch pipeline statistics' });
+  }
+});
+
+/**
+ * NEW ENDPOINT
+ * Record pipeline result (for CI/CD integrations like Jenkins/GitHub Actions)
+ */
+router.post('/cicd-status', async (req, res) => {
+  try {
+    const {
+      name,
+      status,
+      build_time,
+      trigger_type = 'ci',
+      branch,
+      commit_hash,
+      logs = ''
+    } = req.body;
+
+    if (!name || !status) {
+      return res.status(400).json({ error: 'Pipeline name and status are required' });
+    }
+
+    const result = await query(`
+      INSERT INTO pipelines (name, status, build_time, trigger_type, branch, commit_hash, logs)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+    `, [name, status, build_time, trigger_type, branch, commit_hash, logs]);
+
+    res.status(201).json({
+      message: 'Pipeline recorded successfully',
+      pipeline: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error recording pipeline result:', error);
+    res.status(500).json({ error: 'Failed to record pipeline result' });
+  }
+});
 
 module.exports = router;
-
