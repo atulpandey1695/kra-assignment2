@@ -1,197 +1,54 @@
-name: CI/CD
+name: CICD Health Dashboard Pipeline
 
 on:
   push:
-    branches:
-      - '**'
+    branches: [ "main" ]
   pull_request:
-    branches:
-      - '**'
-
-permissions:
-  contents: read
-  packages: write
-
-env:
-  REGISTRY: ghcr.io
+    branches: [ "main" ]
 
 jobs:
-  ci:
-    name: Build and Verify
+  build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Use Node.js 18
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-          cache: npm
-
-      - name: Install root dependencies
-        run: npm ci
-
-      - name: Install client dependencies
-        run: |
-          cd client
-          npm ci
-
-      - name: Build client
-        run: |
-          cd client
-          npm run build
-
-      - name: Basic server start check
-        run: |
-          node -e "require('fs').accessSync('server/index.js')"
-
-  docker:
-    name: Build and Push Docker Images
-    needs: ci
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
+      - name: Set up Docker
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Compute image names (lowercase)
-        id: vars
+      - name: Build and start services with docker-compose
         run: |
-          repo_lower="${GITHUB_REPOSITORY,,}"
-          echo "image_backend=ghcr.io/${repo_lower}/cicd-backend" >> $GITHUB_OUTPUT
-          echo "image_frontend=ghcr.io/${repo_lower}/cicd-frontend" >> $GITHUB_OUTPUT
+          docker-compose -f docker-compose.yml up -d --build
+          echo "Waiting for services to be healthy..."
+          sleep 60
+          docker ps
 
-      - name: Extract metadata (tags, labels) - backend
-        id: meta_backend
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ steps.vars.outputs.image_backend }}
-          tags: |
-            type=raw,value=sha-${{ github.sha }}
-            type=ref,event=branch
-            type=ref,event=tag
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Extract metadata (tags, labels) - frontend
-        id: meta_frontend
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ steps.vars.outputs.image_frontend }}
-          tags: |
-            type=raw,value=sha-${{ github.sha }}
-            type=ref,event=branch
-            type=ref,event=tag
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push backend
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: Dockerfile.backend
-          push: true
-          tags: ${{ steps.meta_backend.outputs.tags }}
-          labels: ${{ steps.meta_backend.outputs.labels }}
-
-      - name: Build and push frontend
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: Dockerfile.frontend
-          push: true
-          tags: ${{ steps.meta_frontend.outputs.tags }}
-          labels: ${{ steps.meta_frontend.outputs.labels }}
-
-  integration:
-    name: Integration Test (docker-compose)
-    needs: docker
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install docker compose
+      - name: Run health checks
         run: |
-          sudo apt-get update
-          sudo apt-get install -y docker-compose-plugin
+          echo "Checking backend health..."
+          curl -f http://localhost:5000/health || exit 1
 
-      - name: Compose up (build locally)
-        run: |
-          docker compose version
-          docker compose up -d --build
+          echo "Checking frontend health..."
+          curl -f http://localhost:8080 || exit 1
 
-      - name: Wait for services
-        run: |
-          echo "Waiting for backend health..."
-          for i in {1..30}; do
-            if curl -fsS http://localhost:5000/health >/dev/null; then echo OK && break; fi; sleep 5; done
-          echo "Waiting for frontend health..."
-          for i in {1..30}; do
-            if curl -fsS http://localhost:8080/health >/dev/null; then echo OK && break; fi; sleep 5; done
-
-      - name: Check API route
-        run: |
-          echo "Backend health:" && curl -fsS http://localhost:5000/health && echo
-
-      - name: Compose down
+      - name: Save job status for dashboard
         if: always()
-        run: docker compose down -v
-
-  slack:
-    name: Slack Notification
-    needs: [ci, docker, integration]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - name: Set status env
-        id: set_status
         run: |
-          if [ "${{ needs.ci.result }}" = "success" ] && [ "${{ needs.docker.result }}" = "success" ] && [ "${{ needs.integration.result }}" = "success" ]; then
-            echo "status=success" >> $GITHUB_OUTPUT
-          else
-            echo "status=failure" >> $GITHUB_OUTPUT
-          fi
+          STATUS="SUCCESS"
+          if [ "${{ job.status }}" != "success" ]; then STATUS="FAILED"; fi
+          
+          echo "Recording pipeline status into Postgres (via backend API)..."
+          curl -X POST http://localhost:5000/cicd-status \
+            -H "Content-Type: application/json" \
+            -d "{\"job\":\"cicd-pipeline\",\"status\":\"$STATUS\"}"
 
       - name: Send Slack notification
-        if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          STATUS: ${{ steps.set_status.outputs.status }}
+        if: always()
         run: |
-          COLOR="#36a64f"
-          TITLE="Build & Deploy Success"
-          if [ "$STATUS" != "success" ]; then
-            COLOR="#ff0000"
-            TITLE="Build & Deploy Failed"
-          fi
-          payload=$(cat <<'EOF'
-          {
-            "attachments": [
-              {
-                "color": "__COLOR__",
-                "title": "__TITLE__",
-                "fields": [
-                  { "title": "Repository", "value": "${{ github.repository }}", "short": true },
-                  { "title": "Branch", "value": "${{ github.ref_name }}", "short": true },
-                  { "title": "Commit", "value": "${{ github.sha }}", "short": false },
-                  { "title": "Run", "value": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}", "short": false }
-                ]
-              }
-            ]
-          }
-          EOF
-          )
-          payload=${payload/__COLOR__/$COLOR}
-          payload=${payload/__TITLE__/$TITLE}
-          curl -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL"
-
+          STATUS="✅ SUCCESS"
+          if [ "${{ job.status }}" != "success" ]; then STATUS="❌ FAILED"; fi
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"CICD Pipeline run on *${GITHUB_REPOSITORY}* (${GITHUB_REF_NAME}) - $STATUS\"}" \
+            ${{ secrets.SLACK_WEBHOOK_URL }}
 
