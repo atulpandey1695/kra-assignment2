@@ -1,4 +1,4 @@
-name: CICD Health Dashboard Pipeline
+iname: CICD Health Dashboard Pipeline
 
 on:
   push:
@@ -17,16 +17,11 @@ jobs:
       - name: Set up Docker
         uses: docker/setup-buildx-action@v3
 
-      - name: Install docker-compose
+      - name: Build and start services with docker compose
         run: |
-          sudo apt-get update
-          sudo apt-get install -y docker-compose
-
-      - name: Build and start services with docker-compose
-        run: |
-          docker-compose -f docker-compose.yml up -d --build
+          docker compose -f docker-compose.yml up -d --build
           echo "Waiting for services to be healthy..."
-          sleep 60
+          sleep 40
           docker ps
 
       - name: Run health checks
@@ -37,6 +32,31 @@ jobs:
           echo "Checking frontend health..."
           curl -f http://localhost:8080 || exit 1
 
+      - name: Install ngrok
+        run: |
+          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | \
+            sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | \
+            sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt update
+          sudo apt install -y ngrok
+
+      - name: Expose frontend (8080) via ngrok
+        run: |
+          ngrok http 8080 --log=stdout > ngrok-frontend.log &
+          sleep 10
+          FRONTEND_URL=$(grep -o 'https://[0-9a-z]*\.ngrok-free\.app' ngrok-frontend.log | head -n 1)
+          echo "Frontend URL: $FRONTEND_URL"
+          echo "FRONTEND_URL=$FRONTEND_URL" >> $GITHUB_ENV
+
+      - name: Expose backend (5000) via ngrok
+        run: |
+          ngrok http 5000 --log=stdout > ngrok-backend.log &
+          sleep 10
+          BACKEND_URL=$(grep -o 'https://[0-9a-z]*\.ngrok-free\.app' ngrok-backend.log | head -n 1)
+          echo "Backend URL: $BACKEND_URL"
+          echo "BACKEND_URL=$BACKEND_URL" >> $GITHUB_ENV
+
       - name: Save job status for dashboard
         if: always()
         run: |
@@ -44,9 +64,9 @@ jobs:
           if [ "${{ job.status }}" != "success" ]; then STATUS="FAILED"; fi
           
           echo "Recording pipeline status into Postgres (via backend API)..."
-          curl -X POST http://localhost:5000/cicd-status \
+          curl -X POST ${{ env.BACKEND_URL }}/cicd-status \
             -H "Content-Type: application/json" \
-            -d "{\"job\":\"cicd-pipeline\",\"status\":\"$STATUS\"}"
+            -d "{\"name\":\"cicd-pipeline\",\"status\":\"$STATUS\"}"
 
       - name: Send Slack notification
         if: always()
@@ -54,5 +74,6 @@ jobs:
           STATUS="✅ SUCCESS"
           if [ "${{ job.status }}" != "success" ]; then STATUS="❌ FAILED"; fi
           curl -X POST -H 'Content-type: application/json' \
-            --data "{\"text\":\"CICD Pipeline run on *${GITHUB_REPOSITORY}* (${GITHUB_REF_NAME}) - $STATUS\"}" \
+            --data "{\"text\":\"CICD Pipeline run on *${GITHUB_REPOSITORY}* (${GITHUB_REF_NAME}) - $STATUS\nFrontend: ${{ env.FRONTEND_URL }}\nBackend: ${{ env.BACKEND_URL }}\"}" \
             ${{ secrets.SLACK_WEBHOOK_URL }}
+
