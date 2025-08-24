@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-and-deploy:
-    runs-on: self-hosted   # ✅ runs on your GCP VM runner
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
@@ -62,14 +62,35 @@ jobs:
             -H "Content-Type: application/json" \
             -d "{\"name\":\"cicd-pipeline\",\"status\":\"$STATUS\"}"            
 
+      - name: Install ngrok
+        run: |
+          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt-get update && sudo apt-get install -y ngrok jq
+
+      - name: Expose frontend and backend via ngrok
+        env:
+          NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+        run: |
+          ngrok config add-authtoken $NGROK_AUTHTOKEN
+          nohup ngrok http 8080 --log=stdout > ngrok-frontend.log &
+          nohup ngrok http 5000 --log=stdout > ngrok-backend.log &
+          sleep 10
+          FRONTEND_URL=$(curl --silent http://127.0.0.1:4040/api/tunnels | jq -r '.tunnels[] | select(.config.addr=="http://localhost:8080") | .public_url')
+          BACKEND_URL=$(curl --silent http://127.0.0.1:4040/api/tunnels | jq -r '.tunnels[] | select(.config.addr=="http://localhost:5000") | .public_url')
+          echo "Frontend URL: $FRONTEND_URL"
+          echo "Backend URL: $BACKEND_URL"
+          echo "FRONTEND_URL=$FRONTEND_URL" >> $GITHUB_ENV
+          echo "BACKEND_URL=$BACKEND_URL" >> $GITHUB_ENV
+
       - name: Add summary with links
         run: |
           {
             echo "## 🚀 CICD Health Dashboard Deployment"
             echo ""
             echo "- **Status**: ${{ job.status }}"
-            echo "- �� Frontend UI: http://<YOUR_VM_EXTERNAL_IP>:8080"
-            echo "- ⚙️ Backend API: http://<YOUR_VM_EXTERNAL_IP>:5000"
+            echo "- 🌐 [Frontend UI](${FRONTEND_URL})"
+            echo "- ⚙️ [Backend API](${BACKEND_URL})"
           } >> $GITHUB_STEP_SUMMARY
 
       - name: Send Slack notification
@@ -78,6 +99,6 @@ jobs:
           STATUS="✅ SUCCESS"
           if [ "${{ job.status }}" != "success" ]; then STATUS="❌ FAILED"; fi
           curl -X POST -H 'Content-type: application/json' \
-            --data "{\"text\":\"CICD Pipeline run on *${GITHUB_REPOSITORY}* (${GITHUB_REF_NAME}) - $STATUS\n🌐 Frontend: http://<YOUR_VM_EXTERNAL_IP>:8080\n⚙️ Backend: http://<YOUR_VM_EXTERNAL_IP>:5000\"}" \
+            --data "{\"text\":\"CICD Pipeline run on *${GITHUB_REPOSITORY}* (${GITHUB_REF_NAME}) - $STATUS\n🌐 Frontend: ${FRONTEND_URL}\n⚙️ Backend: ${BACKEND_URL}\"}" \
             ${{ secrets.SLACK_WEBHOOK_URL }}
 
