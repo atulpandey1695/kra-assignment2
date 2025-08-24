@@ -1,4 +1,4 @@
-iname: CICD Health Dashboard Pipeline
+name: CICD Health Dashboard Pipeline
 
 on:
   push:
