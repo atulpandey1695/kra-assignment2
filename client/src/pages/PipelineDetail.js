@@ -10,7 +10,7 @@ const PipelineDetail = () => {
   useEffect(() => {
     const fetchPipeline = async () => {
       try {
-        const res = await fetch(`${window.API_BASE_URL}/pipelines/${id}`);
+	const res = await fetch(`/api/pipelines/${id}`);      
         if (!res.ok) {
           throw new Error(`API error: ${res.status}`);
         }

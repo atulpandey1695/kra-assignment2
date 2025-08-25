@@ -8,7 +8,7 @@ A real-time monitoring dashboard for CI/CD pipelines with automated alerting and
 - **Real-time Pipeline Monitoring**: Live status updates via WebSocket connections
 - **Comprehensive Metrics**: Success rates, build times, and performance analytics
 - **Automated Alerting**: Configurable alerts for failures, timeouts, and performance drops
-- **Modern UI**: Responsive React frontend with Tailwind CSS
+- **Modern UI**: Responsive React frontend with Tailwind CSS served via **Nginx**
 - **Database Persistence**: PostgreSQL for reliable data storage
 - **RESTful API**: Complete backend API for pipeline management
 
@@ -31,8 +31,8 @@ A real-time monitoring dashboard for CI/CD pipelines with automated alerting and
 ### System Overview
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   React Frontend│    │  Node.js Backend│    │  PostgreSQL DB  │
-│   (Port 8080)   │◄──►│   (Port 5000)   │◄──►│   (Port 5432)   │
+│ React Frontend  │    │ Node.js Backend │    │  PostgreSQL DB  │
+│  (Port 8080)    │◄──►│   (Port 5000)   │◄──►│   (Port 5432)   │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       │
          │              ┌─────────────────┐              │
@@ -41,6 +41,10 @@ A real-time monitoring dashboard for CI/CD pipelines with automated alerting and
                         │  Communication  │
                         └─────────────────┘
 ```
+- **Nginx** acts as a reverse proxy:
+  - Serves React frontend build on port `8080`
+  - Proxies API requests from `/api/` to backend (`:5000`)
+  - Proxies WebSocket connections (`/socket.io/`)
 
 ### Technology Stack
 
@@ -64,320 +68,81 @@ A real-time monitoring dashboard for CI/CD pipelines with automated alerting and
 - **Axios** - HTTP client
 
 #### DevOps & Monitoring
+- **Docker + Nginx** - Containerized deployment
+- **GitHub Actions** - CI/CD pipeline
+- **GCP VM (Self-hosted Runner)** - Workflow execution & metrics ingestion
+- **Slack Integration** - Pipeline status notifications
 - **Helmet** - Security headers
 - **CORS** - Cross-origin resource sharing
 - **Rate Limiting** - API protection
 - **Compression** - Response optimization
 - **Morgan** - HTTP request logging
 
-## 📋 Prerequisites
-
-### System Requirements
-- **Node.js**: v18.0.0 or higher
-- **PostgreSQL**: v12.0 or higher
-- **Git**: For version control
-- **npm** or **yarn**: Package manager
-
-### Port Requirements
-- **Port 8080**: React development server
-- **Port 5000**: Node.js backend server
-- **Port 5432**: PostgreSQL database
-
 ## 🛠️ Installation & Setup
 
-### 1. Clone the Repository
+### Docker + Nginx Deployment
+
+1. Build and run containers:
 ```bash
-git clone <repository-url>
-cd cicd-dashboard
+docker-compose up --build -d
 ```
 
-### 2. Install Dependencies
-```bash
-# Install backend dependencies
-npm install
+2. Nginx Proxy Config Example:
+```nginx
+server {
+    listen 80;
 
-# Install frontend dependencies
-cd client
-npm install
-cd ..
+    location / {
+        root /usr/share/nginx/html;
+        index index.html;
+        try_files $uri /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://backend:5000/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    location /socket.io/ {
+        proxy_pass http://backend:5000/socket.io/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
 ```
 
-### 3. Database Setup
-```bash
-# Create database and user (as postgres user)
-sudo -u postgres psql
+3. Access URLs:
+- **Frontend** → http://localhost:8080  
+- **Backend API** → http://localhost/api  
+- **WebSockets** → ws://localhost/socket.io/
 
-CREATE DATABASE testdb;
-CREATE USER atulp WITH PASSWORD 'atulp123';
-GRANT ALL PRIVILEGES ON DATABASE testdb TO atulp;
-\q
-```
+## 🤖 CI/CD Workflow
 
-### 4. Environment Configuration
-```bash
-# Copy environment template
-cp env.example .env
+### GitHub Actions + GCP VM (Self-hosted Runner)
+- CI/CD workflow runs on a **GCP VM self-hosted runner**
+- Steps:
+  - Install dependencies & run tests
+  - Build Docker images
+  - Push to container registry
+  - Deploy containers to VM
+  - Ingest CI/CD pipeline metrics
 
-# Edit .env file with your configuration
-nano .env
-```
+### Slack Integration
+- Pipeline success/failure notifications are sent to configured Slack channel
+- Includes:
+  - ✅ Frontend URL (http://localhost:8080)
+  - ⚙️ Backend API URL (http://localhost/api)
+  - ❌ Error details (on failure)
 
-### 5. Database Initialization
-```bash
-# Setup database tables
-npm run setup-db
-
-# Seed with sample data
-npm run seed-data
-```
-
-### 6. Start the Application
-```bash
-# Development mode (both frontend and backend)
-npm run dev-full
-
-# Or start separately:
-# Backend only
-npm run server
-
-# Frontend only
-npm run client
-```
-
-## 🎯 Quick Start Guide
-
-### 1. Verify Installation
-```bash
-# Check Node.js version
-node --version  # Should be v18+
-
-# Check PostgreSQL
-psql --version  # Should be v12+
-
-# Check ports availability
-sudo netstat -tnlpu | grep -E '8080|5000|5432'
-```
-
-### 2. Start the Application
-```bash
-# Install all dependencies
-npm run install-all
-
-# Setup database
-npm run setup-db
-
-# Seed sample data
-npm run seed-data
-
-# Start in development mode
-npm run dev-full
-```
-
-### 3. Access the Dashboard
-- **Frontend**: http://localhost:8080
-- **Backend API**: http://localhost:5000
-- **Health Check**: http://localhost:5000/health
-
-## 📚 API Documentation
-
-### Base URL
-```
-http://localhost:5000/api
-```
-
-### Endpoints
-
-#### Pipelines
-- `GET /pipelines` - List all pipelines
-- `GET /pipelines/:id` - Get pipeline details
-- `POST /pipelines` - Create new pipeline
-- `PATCH /pipelines/:id/status` - Update pipeline status
-- `GET /pipelines/:id/logs` - Get pipeline logs
-- `DELETE /pipelines/:id` - Delete pipeline
-
-#### Metrics
-- `GET /metrics/dashboard-summary` - Dashboard metrics
-- `GET /metrics/success-rate` - Success rate data
-- `GET /metrics/avg-build-time` - Build time statistics
-- `GET /metrics/trends` - Performance trends
-- `GET /metrics/top-performers` - Top performing pipelines
-
-#### Alerts
-- `GET /alerts` - List all alerts
-- `POST /alerts` - Create new alert
-- `PATCH /alerts/:id/status` - Update alert status
-- `GET /alerts/configs` - Get alert configurations
-- `POST /alerts/test` - Test alert notifications
-
-### WebSocket Events
-
-#### Client to Server
-- `join-dashboard` - Join dashboard room
-- `join-pipeline` - Join specific pipeline room
-- `pipeline-update` - Update pipeline status
-- `metrics-update` - Update metrics
-
-#### Server to Client
-- `pipeline-status-changed` - Pipeline status update
-- `metrics-changed` - Metrics update
-- `new-alert` - New alert notification
-- `system-status-update` - System status update
-
-## 🔧 Configuration
-
-### Environment Variables
-
-#### Server Configuration
-```env
-PORT=5000
-NODE_ENV=development
-```
-
-#### Database Configuration
-```env
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=testdb
-DB_USER=atulp
-DB_PASSWORD=atulp123
-```
-
-#### Slack Integration (Optional)
-```env
-SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
-SLACK_CHANNEL_ID=C0123456789
-```
-
-###Environment Security
-```env
-JWT_SECRET=your-super-secret-jwt-key
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX_REQUESTS=100
-```
-
-## 🧪 Testing
-
-### Manual Testing
-```bash
-# Test backend health
-curl http://localhost:5000/health
-
-# Test API endpoints
-curl http://localhost:5000/api/pipelines
-curl http://localhost:5000/api/metrics/dashboard-summary
-curl http://localhost:5000/api/alerts
-```
-
-### Real-time Testing
-1. Open dashboard in browser
-2. Check WebSocket connection status
-3. Monitor real-time updates
-4. Test alert notifications
-
-## 📊 Dashboard Features
-
-### Real-time Monitoring
-- Live pipeline status updates
-- Real-time metrics collection
-- Instant alert notifications
-- WebSocket-based communication
-
-### Metrics Visualization
-- Success/failure rate charts
-- Build time trends
-- Performance analytics
-- Top performer rankings
-
-### Alert Management
-- Configurable alert rules
-- Multiple notification channels
-- Alert history tracking
-- Alert status management
-
-## 🚀 Deployment
-
-### Production Setup
-```bash
-# Build frontend
-npm run client-build
-
-# Set production environment
-export NODE_ENV=production
-
-# Start production server
-npm start
-```
-
-### Docker Deployment
-```dockerfile
-# Dockerfile example
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY . .
-EXPOSE 5000
-CMD ["npm", "start"]
-```
-
-## 🤝 Contributing
-
-### Development Workflow
-1. Fork the repository
-2. Create feature branch
-3. Make changes
-4. Add tests
-5. Submit pull request
-
-### Code Standards
-- Follow ESLint configuration
-- Use Prettier for formatting
-- Write meaningful commit messages
-- Add documentation for new features
+---
 
 ## 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-### Troubleshooting
-
-#### Common Issues
-1. **Port conflicts**: Check if ports 8080, 5000, 5432 are available
-2. **Database connection**: Verify PostgreSQL is running and credentials are correct
-3. **Node.js version**: Ensure you're using Node.js v18 or higher
-4. **Dependencies**: Run `npm install` in both root and client directories
-
-#### Getting Help
-- Check the logs in the `logs/` directory
-- Review the health check endpoint
-- Verify environment variables
-- Check database connectivity
-
-### Contact
-- **Issues**: Create an issue on GitHub
-- **Documentation**: Check the docs folder
-- **Support**: Contact the development team
-
-## 🔮 Roadmap
-
-### Planned Features
-- [ ] Advanced analytics dashboard
-- [ ] Custom alert rules builder
-- [ ] Pipeline templates
-- [ ] Multi-tenant support
-- [ ] API rate limiting dashboard
-- [ ] Export functionality
-- [ ] Mobile app
-- [ ] Dark mode theme
-
-### Performance Improvements
-- [ ] Database query optimization
-- [ ] Caching layer implementation
-- [ ] CDN integration
-- [ ] Load balancing support
-
----
-
-**Built with ❤️ for DevOps teams**
