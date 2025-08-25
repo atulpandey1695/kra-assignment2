@@ -5,11 +5,11 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-  workflow_dispatch:   # ✅ allows manual trigger from GitHub Actions UI
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
-    runs-on: self-hosted   # ✅ runs on your GCP VM runner
+    runs-on: self-hosted
 
     steps:
       - name: Checkout code
@@ -23,10 +23,10 @@ jobs:
           sudo systemctl start docker
           docker --version
 
-      - name: Install docker-compose
+      - name: Install dependencies (docker-compose + jq)
         run: |
           sudo apt-get update
-          sudo apt-get install -y docker-compose
+          sudo apt-get install -y docker-compose jq
 
       - name: Login to Docker Hub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
@@ -41,9 +41,7 @@ jobs:
 
       - name: Run health checks
         run: |
-          echo "Checking backend health..."
           curl -f http://localhost:5000/health || exit 1
-          echo "Checking frontend health..."
           curl -f http://localhost:8080 || exit 1
 
       - name: Save job status for dashboard
@@ -77,6 +75,51 @@ jobs:
               \"branch\": \"${GITHUB_REF_NAME}\",
               \"commit_hash\": \"${GITHUB_SHA}\"
             }"
+
+      # 🔹 NEW STEP: Backfill recent GitHub Actions runs (deduplication included)
+      - name: Backfill recent GitHub Actions runs
+        if: always()
+        run: |
+          THREE_DAYS_AGO=$(date -d "3 days ago" +%s)
+
+          echo "Fetching last 10 runs from GitHub API..."
+          curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs?per_page=10" \
+          | jq -r '.workflow_runs[] | [.name, .conclusion, .head_branch, .head_sha, .run_started_at, .updated_at] | @tsv' \
+          | while IFS=$'\t' read -r NAME STATUS BRANCH COMMIT START END; do
+              
+              START_TS=$(date -d "$START" +%s)
+              END_TS=$(date -d "$END" +%s)
+
+              # Skip runs older than 3 days
+              if [ "$START_TS" -lt "$THREE_DAYS_AGO" ]; then
+                echo "⏭️ Skipping old run: $NAME ($START)"
+                continue
+              fi
+
+              # Convert GitHub conclusion to dashboard status
+              if [ "$STATUS" == "success" ]; then STATE="success";
+              elif [ "$STATUS" == "failure" ]; then STATE="failed";
+              else STATE="$STATUS"; fi
+
+              BUILD_TIME=$((END_TS - START_TS))
+
+              echo "Checking if $COMMIT [$STATE] already exists in DB..."
+              EXISTS=$(curl -s "http://localhost:5000/api/pipelines?name=$NAME&status=$STATE&branch=$BRANCH&commit_hash=$COMMIT" \
+                | jq '.pipelines | length')
+
+              if [ "$EXISTS" -gt 0 ]; then
+                echo "✅ Already exists, skipping: $NAME ($COMMIT)"
+                continue
+              fi
+
+              echo "🚀 Syncing run: $NAME [$STATE] ($BRANCH $COMMIT) build_time=${BUILD_TIME}s"
+
+              curl -s -X POST http://localhost:5000/api/pipelines/cicd-status \
+                -H "Content-Type: application/json" \
+                -d "{\"name\":\"$NAME\",\"status\":\"$STATE\",\"build_time\":$BUILD_TIME,\"branch\":\"$BRANCH\",\"commit_hash\":\"$COMMIT\",\"trigger_type\":\"github\"}" \
+                || echo "⚠️ Failed to sync $NAME"
+          done
 
       - name: Add summary with links
         run: |
