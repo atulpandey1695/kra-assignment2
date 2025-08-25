@@ -8,7 +8,7 @@
 │                        Client Layer                             │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
 │  │   React App     │  │   Mobile App    │  │   API Clients   │  │
-│  │   (Port 3000)   │  │   (Future)      │  │   (External)    │  │
+│  │   (Port 8080)   │  │   (Future)      │  │   (External)    │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
                                 │
@@ -703,5 +703,5 @@ JWT_SECRET=your-production-secret
 ---
 
 **Document Version**: 1.0  
-**Last Updated**: December 2024  
+**Last Updated**: August 2025  
 **Prepared By**: DevOps Engineering Team

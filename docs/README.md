@@ -32,7 +32,7 @@ A real-time monitoring dashboard for CI/CD pipelines with automated alerting and
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   React Frontend│    │  Node.js Backend│    │  PostgreSQL DB  │
-│   (Port 3000)   │◄──►│   (Port 5000)   │◄──►│   (Port 5432)   │
+│   (Port 8080)   │◄──►│   (Port 5000)   │◄──►│   (Port 5432)   │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       │
          │              ┌─────────────────┐              │
@@ -79,7 +79,7 @@ A real-time monitoring dashboard for CI/CD pipelines with automated alerting and
 - **npm** or **yarn**: Package manager
 
 ### Port Requirements
-- **Port 3000**: React development server
+- **Port 8080**: React development server
 - **Port 5000**: Node.js backend server
 - **Port 5432**: PostgreSQL database
 
@@ -155,7 +155,7 @@ node --version  # Should be v18+
 psql --version  # Should be v12+
 
 # Check ports availability
-sudo netstat -tnlpu | grep -E '3000|5000|5432'
+sudo netstat -tnlpu | grep -E '8080|5000|5432'
 ```
 
 ### 2. Start the Application
@@ -174,7 +174,7 @@ npm run dev-full
 ```
 
 ### 3. Access the Dashboard
-- **Frontend**: http://localhost:3000
+- **Frontend**: http://localhost:8080
 - **Backend API**: http://localhost:5000
 - **Health Check**: http://localhost:5000/health
 
@@ -248,16 +248,7 @@ SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
 SLACK_CHANNEL_ID=C0123456789
 ```
 
-#### Email Integration (Optional)
-```env
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_USER=your-email@gmail.com
-EMAIL_PASSWORD=your-app-password
-EMAIL_FROM=your-email@gmail.com
-```
-
-#### Security
+###Environment Security
 ```env
 JWT_SECRET=your-super-secret-jwt-key
 RATE_LIMIT_WINDOW_MS=900000
@@ -353,7 +344,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ### Troubleshooting
 
 #### Common Issues
-1. **Port conflicts**: Check if ports 3000, 5000, 5432 are available
+1. **Port conflicts**: Check if ports 8080, 5000, 5432 are available
 2. **Database connection**: Verify PostgreSQL is running and credentials are correct
 3. **Node.js version**: Ensure you're using Node.js v18 or higher
 4. **Dependencies**: Run `npm install` in both root and client directories

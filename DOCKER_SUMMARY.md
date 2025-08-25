@@ -14,7 +14,7 @@
 docker-compose up -d --build
 
 # Access application
-Frontend: http://localhost:80
+Frontend: http://localhost:8080
 Backend: http://localhost:5000
 ```
 
