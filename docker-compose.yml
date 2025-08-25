@@ -35,9 +35,7 @@ services:
       - cicd-network
 
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
+    image: atul1695/cicd-dashboard-backend:latest
     container_name: cicd-backend
     environment:
       - NODE_ENV=production
@@ -64,9 +62,7 @@ services:
       - cicd-network
 
   frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
+    image: atul1695/cicd-dashboard-frontend:latest
     container_name: cicd-frontend
     environment:
       - REACT_APP_API_BASE_URL=http://backend:5000

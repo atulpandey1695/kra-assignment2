@@ -28,12 +28,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y docker-compose
 
-      - name: Build and start services with docker-compose
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+      - name: Pull and start services with docker-compose
         run: |
-          docker-compose -f docker-compose.yml up -d --build
+          docker-compose -f docker-compose.yml pull
+          docker-compose -f docker-compose.yml up -d
           echo "Waiting for services to be healthy..."
           sleep 60
-          docker ps
+          docker ps          
 
       - name: Run health checks
         run: |
@@ -69,7 +73,7 @@ jobs:
             echo "## 🚀 CICD Health Dashboard Deployment"
             echo ""
             echo "- **Status**: ${{ job.status }}"
-            echo "- �� Frontend UI: http://<YOUR_VM_EXTERNAL_IP>:8080"
+            echo "- 🌐 Frontend UI: http://<YOUR_VM_EXTERNAL_IP>:8080"
             echo "- ⚙️ Backend API: http://<YOUR_VM_EXTERNAL_IP>:5000"
           } >> $GITHUB_STEP_SUMMARY
 
