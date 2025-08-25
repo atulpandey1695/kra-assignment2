@@ -24,7 +24,7 @@ A real-time monitoring dashboard for CI/CD pipelines with automated alerting and
 - **Pipeline Failures**: Immediate notifications on build failures
 - **Build Time Thresholds**: Alerts when builds exceed time limits
 - **Success Rate Drops**: Notifications when success rates fall below thresholds
-- **Multiple Channels**: Slack and Email integration (configurable)
+- **Multiple Channels**: Slack integration (configurable)
 
 ## 🏗️ Architecture
 
