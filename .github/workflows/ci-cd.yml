@@ -49,8 +49,10 @@ jobs:
       - name: Save job status for dashboard
         if: always()
         run: |
-          STATUS="SUCCESS"
-          if [ "${{ job.status }}" != "success" ]; then STATUS="FAILED"; fi
+          START_TIME=$(date +%s)
+
+          STATUS="success"
+          if [ "${{ job.status }}" != "success" ]; then STATUS="failed"; fi
 
           echo "Waiting for backend to be ready..."
           for i in {1..10}; do
@@ -62,10 +64,19 @@ jobs:
             sleep 5
           done
 
+          END_TIME=$(date +%s)
+          BUILD_TIME=$((END_TIME - START_TIME))
+
           echo "Recording pipeline status into Postgres (via backend API)..."
-          curl -X POST http://localhost:5000/pipelines/cicd-status \
+          curl -X POST http://localhost:5000/api/pipelines/cicd-status \
             -H "Content-Type: application/json" \
-            -d "{\"name\":\"cicd-pipeline\",\"status\":\"$STATUS\"}"            
+            -d "{
+              \"name\": \"cicd-pipeline\",
+              \"status\": \"$STATUS\",
+              \"build_time\": $BUILD_TIME,
+              \"branch\": \"${GITHUB_REF_NAME}\",
+              \"commit_hash\": \"${GITHUB_SHA}\"
+            }"
 
       - name: Add summary with links
         run: |
