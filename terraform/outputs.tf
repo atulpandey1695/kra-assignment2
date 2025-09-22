@@ -62,3 +62,4 @@ output "deployment_instructions" {
     - Network: Standard tier (no egress charges for first 1GB/month)
   EOT
 }
+

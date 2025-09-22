@@ -16,3 +16,21 @@ build/
 # Cache
 .cache/
 
+# Terraform
+terraform/.terraform/       # Ignore .terraform folder inside terraform/
+terraform/.terraform.lock.hcl
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/crash.log
+terraform/override.tf
+terraform/override.tf.json
+terraform/*_override.tf
+terraform/*_override.tf.json
+
+# Sensitive variable files
+terraform/terraform.tfvars  # Ignore secrets
+*.tfvars
+
+# Logs
+*.log
+

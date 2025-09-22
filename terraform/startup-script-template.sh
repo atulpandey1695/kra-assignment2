@@ -715,3 +715,4 @@ echo "To monitor: ./monitor.sh"
 
 echo "=== Startup Script Completed Successfully ==="
 echo "Timestamp: $(date)"
+

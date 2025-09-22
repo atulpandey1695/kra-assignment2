@@ -121,3 +121,4 @@ echo "  - Historical data for last 24 hours"
 echo ""
 echo "🌐 Refresh your dashboard to see the data!"
 echo "   URL: http://$(curl -s ifconfig.me):8080"
+

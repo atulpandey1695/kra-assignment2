@@ -130,3 +130,4 @@ After successful setup:
 ---
 
 **Your Slack integration is now ready! 🚀**
+
